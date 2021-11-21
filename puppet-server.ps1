@@ -218,23 +218,23 @@ if (!$DomainName)
     $DomainName = Get-Response 'Enter your domain name (e.g foo-bar.com)' 'string' -Mandatory
 }
 
-if (!$Hostname -and !$SkipOptionalPrompts)
+if (!$Hostname)
 {
-    $CurrentHostname = & hostname
-    Write-Host "Current hostname is $CurrentHostname"
-    $HostnameCheck = Get-Response 'Do you want to change the hostname?' 'bool'
-    if ($HostnameCheck)
+    $Hostname = & hostname
+    if (!$SkipOptionalPrompts)
     {
-        $Hostname = Get-Response 'Enter the new hostname' 'string' -Mandatory
+        Write-Host "Current hostname is $Hostname"
+        $HostnameCheck = Get-Response 'Do you want to change the hostname?' 'bool'
+        if ($HostnameCheck)
+        {
+            $Hostname = Get-Response 'Enter the new hostname' 'string' -Mandatory
+        }
     }
-    else
-    {
-        $Hostname = $CurrentHostname
-    }
-    if ($Hostname -notmatch "$DomainName")
-    {
-        $Hostname += ".$DomainName"
-    }
+}
+
+if ($Hostname -notmatch "$DomainName")
+{
+    $Hostname += ".$DomainName"
 }
 
 if (!$eyamlPrivateKey -or !$eyamlPublicKey -and !$SkipOptionalPrompts)
@@ -301,7 +301,7 @@ if ($BootstrapHiera)
 {
     if (!$PuppetserverClass)
     {
-        $PuppetserverClass = Get-Response 'Please enter the puppetserver class name (e.g foo-bar)' 'string' -Mandatory
+        $PuppetserverClass = Get-Response 'Please enter the puppetserver class name (e.g puppetserver)' 'string' -Mandatory
     }
 }
 
@@ -322,11 +322,14 @@ else
 }
 if ($GitHubRepo)
 {
-    $ConfirmationMessage + @"
+    $ConfirmationMessage += @"
 Install r10k: true
-GitHub repository: $GitHubRepo
-Deploy key: $DeployKeyPath
+GitHub repository: $GitHubRepo`n
 "@
+    if ($DeployKeyPath)
+    {
+        $ConfirmationMessage += "Deploy key: $DeployKeyPath`n"
+    }
     if ($BootstrapEnvironment)
     {
         $ConfirmationMessage += "Bootstrap environment: $BootstrapEnvironment`n"
@@ -367,7 +370,7 @@ if (!$PuppetPowerShellCheck)
     Write-Host 'Installing Puppet PowerShell module'
     try
     {
-        Install-Module -Name 'PuppetPowerShell' -Repository PSGallery -Scope global -Force
+        Install-Module -Name 'PuppetPowerShell' -Repository PSGallery -Scope AllUsers -Force
     }
     catch
     {
@@ -458,19 +461,19 @@ if ($DeployKeyPath)
         Write-Host 'Press any key to continue the bootstrap process'
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
-}
 
-# Make sure the key has sensible permissions (we run Puppetserver as root)
-Write-Host 'Setting ACLs on deploy key'
-& chown root:root (Join-Path $DeployKeyParent '*')
-if ($LASTEXITCODE -ne 0)
-{
-    throw 'Failed to chown deploy key'
-}
-& chmod '0600' (Join-Path $DeployKeyParent '*')
-if ($LASTEXITCODE -ne 0)
-{
-    throw 'Failed to set ACLs on deploy key'
+    # Make sure the key has sensible permissions (we run Puppetserver as root)
+    Write-Host 'Setting ACLs on deploy key'
+    & chown root:root (Join-Path $DeployKeyParent '*')
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw 'Failed to chown deploy key'
+    }
+    & chmod '0600' (Join-Path $DeployKeyParent '*')
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw 'Failed to set ACLs on deploy key'
+    }
 }
 
 # Keyscan github.com, it makes things easier later on
