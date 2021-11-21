@@ -51,6 +51,11 @@ param
     [string]
     $GitHubRepo,
 
+    # The deploy key for the repo (if it's a private repository)
+    [Parameter(Mandatory = $false)]
+    [string]
+    $DeployKeyPath,
+
     # The bootstrap environment to use for the Puppet code (if using r10k), this should be the branch name
     [Parameter(Mandatory = $false)]
     [string]
@@ -262,21 +267,21 @@ if ((!$GenerateR10kConfiguration) -or (!$GitHubRepo) -and !$SkipOptionalPrompts)
 
 if ($GitHubRepo)
 {
-    if (!$DeployKeyPath)
+    # Try to be clever about key naming
+    if ($GitHubRepo -match '\/(?<repo_name>.*).git')
+    {
+        $RepoName = $matches['repo_name']
+    }
+    else
+    {
+        $RepoName = 'control_repo'
+    }
+    if (!$DeployKeyPath -and !$SkipOptionalPrompts)
     {
         # Check if this is a private repo
         $PrivateRepoCheck = Get-Response 'Is this a private repository?' 'bool'
         if ($PrivateRepoCheck)
         {
-            # Try to be clever about key naming
-            if ($GitHubRepo -match '\/(?<repo_name>.*).git')
-            {
-                $RepoName = $matches['repo_name']
-            }
-            else
-            {
-                $RepoName = 'control_repo'
-            }
             $DeployKeyPath = "/etc/puppetlabs/puppetserver/ssh/id-$RepoName.rsa"
         }
     }
@@ -476,22 +481,24 @@ if ($DeployKeyPath)
     }
 }
 
-# Keyscan github.com, it makes things easier later on
+# Keyscan github.com, it makes things easier later on (we also use root to run puppetserver)
 Write-Host 'Adding github.com to known hosts'
-$Keyscan = & ssh-keyscan github.com
+$Keyscan = (& ssh-keyscan github.com) | Out-String
+$KnownHostsFile = '/root/.ssh/known_hosts'
 try
 {
-    $KnownHostsFile = Get-Content '/root/.ssh/known_hosts' -Raw
+    $KnownHostsFileContent = Get-Content $KnownHostsFile -Raw -ErrorAction Stop
 }
-catch {}
-if ($KnownHostsFile)
+catch
+{}
+if ($KnownHostsFileContent)
 {
     # Only add if it's not already there
-    if ($KnownHostsFile -notmatch $Keyscan)
+    if ($KnownHostsFile -notmatch [Regex]::Escape($Keyscan))
     {
         try
         {
-            Add-Content -Path $KnownHostsFile -Value $Keyscan
+            Add-Content -Path $KnownHostsFile -Value $Keyscan -Force
         }
         catch
         {
@@ -503,7 +510,7 @@ else
 {
     try
     {
-        New-Item -Path $KnownHostsFile -Value $Keyscan
+        New-Item -Path $KnownHostsFile -Value $Keyscan -Force
     }
     catch
     {
@@ -616,7 +623,7 @@ if ($BootstrapHiera)
     if ($BootstrapEnvironment)
     {
         $ModulePath = "/etc/puppetlabs/code/environments/$BootstrapEnvironment/modules:/etc/puppetlabs/code/environments/$BootstrapEnvironment/ext-modules"
-        $ApplyArguments += ("--module_path=$ModulePath")
+        $ApplyArguments += ("--modulepath=$ModulePath")
     }
     if ($PuppetserverClass)
     {
