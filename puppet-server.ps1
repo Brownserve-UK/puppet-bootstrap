@@ -16,7 +16,7 @@
 [CmdletBinding()]
 param
 (
-    # The major version of Puppet to install
+    # The major version of Puppetserver to install
     [Parameter(Mandatory = $true)]
     [int]
     $MajorVersion,
@@ -27,7 +27,7 @@ param
     $DomainName,
 
     # The name of the Puppetserver class to use
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]
     $PuppetserverClass,
 
@@ -67,7 +67,7 @@ param
     $eyamlPrivateKey,
 
     # Optional eyaml public key
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]
     $eyamlPublicKey,
 
@@ -192,32 +192,14 @@ function Get-Response
 }
 function Test-Administrator
 {
-    switch -regex ($global:OS)
+    $RootCheck = & id -u
+    if ($RootCheck -eq 0)
     {
-        'Windows'
-        {
-            $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-            $Return = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-            Return $Return
-        }
-        'Linux|macOS'
-        {
-            $WhoAmI = Start-SilentProcess `
-                -FilePath 'whoami' `
-                -PassThru | Select-Object -ExpandProperty 'OutputContent'
-            if ($WhoAmI -eq 'root')
-            {
-                Return $true
-            }
-            else
-            {
-                Return $false
-            }
-        }
-        Default
-        {
-            throw "Cannot test administrator on $global:OS"
-        }
+        return $true
+    }
+    else
+    {
+        return $false
     }
 }
 
@@ -226,24 +208,24 @@ if (!$IsLinux)
     throw 'Cannot install Puppetserver on non-linux systems.'
 }
 
-if (!Test-Administrator)
+if (!(Test-Administrator))
 {
     throw 'This script must be run as administrator.'
 }
 
 if (!$DomainName)
 {
-    $DomainName = Get-Response 'Enter your domain name (e.g foo-bar.com): ' 'string' -Mandatory
+    $DomainName = Get-Response 'Enter your domain name (e.g foo-bar.com)' 'string' -Mandatory
 }
 
 if (!$Hostname -and !$SkipOptionalPrompts)
 {
     $CurrentHostname = & hostname
     Write-Host "Current hostname is $CurrentHostname"
-    $HostnameCheck = Get-Response 'Do you want to change the hostname? [y]es/[n]o: ' 'bool'
+    $HostnameCheck = Get-Response 'Do you want to change the hostname?' 'bool'
     if ($HostnameCheck)
     {
-        $Hostname = Get-Response 'Enter the new hostname (e.g foo-bar.com): ' 'string' -Mandatory
+        $Hostname = Get-Response 'Enter the new hostname' 'string' -Mandatory
     }
     else
     {
@@ -255,25 +237,25 @@ if (!$Hostname -and !$SkipOptionalPrompts)
     }
 }
 
-if (!$eyamlPrivateKey -or !$eyamlPublicKey)
+if (!$eyamlPrivateKey -or !$eyamlPublicKey -and !$SkipOptionalPrompts)
 {
-    $eyamlCheck = Get-Response 'Do you have an eyaml key pair? [y]es/[n]o: ' 'bool'
+    $eyamlCheck = Get-Response 'Do you have an eyaml key pair?' 'bool'
     if ($eyamlCheck)
     {
-        $eyamlPrivateKey = Get-Response 'Please enter your eyaml private key: ' 'string' -Mandatory
-        $eyamlPublicKey = Get-Response 'Please enter your eyaml public key: ' 'string' -Mandatory
+        $eyamlPrivateKey = Get-Response 'Please enter your eyaml private key' 'string' -Mandatory
+        $eyamlPublicKey = Get-Response 'Please enter your eyaml public key' 'string' -Mandatory
     }
 }
 
-if ((!$GenerateR10kConfiguration) -or (!$GitHubRepo))
+if ((!$GenerateR10kConfiguration) -or (!$GitHubRepo) -and !$SkipOptionalPrompts)
 {
-    $r10kCheck = Get-Response 'Do you plan to use r10k? [y]es/[n]o: ' 'bool'
+    $r10kCheck = Get-Response 'Do you plan to use r10k?' 'bool'
     if ($r10kCheck)
     {
         $GenerateR10kConfiguration = $true
         while ($GitHubRepo -notmatch 'git@github.com:(.*)\/(.*).git')
         {
-            $GitHubRepo = Get-Response 'Please enter your GitHub repository: ' 'string' -Mandatory
+            $GitHubRepo = Get-Response 'Please enter your GitHub repository' 'string' -Mandatory
         }
     }
 }
@@ -283,7 +265,7 @@ if ($GitHubRepo)
     if (!$DeployKeyPath)
     {
         # Check if this is a private repo
-        $PrivateRepoCheck = Get-Response 'Is this a private repository? [y]es/[n]o: ' 'bool'
+        $PrivateRepoCheck = Get-Response 'Is this a private repository?' 'bool'
         if ($PrivateRepoCheck)
         {
             # Try to be clever about key naming
@@ -301,20 +283,30 @@ if ($GitHubRepo)
 
     if (!$BootstrapEnvironment)
     {
-        $BootstrapEnvironment = Get-Response 'Please enter the bootstrap environment name (e.g bootstrap, production): ' 'string' -Mandatory
+        $BootstrapEnvironment = Get-Response 'Please enter the bootstrap environment name (e.g bootstrap, production)' 'string' -Mandatory
     }
-    if (!$BootstrapHiera)
+}
+
+if (!$BootstrapHiera -and !$SkipOptionalPrompts)
+{
+    $BootstrapHieraCheck = Get-Response 'Do you want to set a bootstrap hiera data file?' 'bool'
+    if ($BootstrapHieraCheck)
     {
-        $BootstrapHieraCheck = Get-Response 'Do you want to set a bootstrap hiera data file? [y]es/[n]o: ' 'bool'
-        if ($BootstrapEnvironmentCheck)
-        {
-            $BootstrapHiera = Get-Response 'Please enter the bootstrap hiera data file name (e.g puppet.bootstrap.yaml): ' 'string' -Mandatory
-        }
+        $BootstrapHiera = Get-Response 'Please enter the bootstrap hiera data file name (e.g puppet.bootstrap.yaml)' 'string' -Mandatory
+    }
+}
+
+# We MUST have a PuppetserverClass if we've got a bootstrap hiera otherwise Puppet apply won't do anything 😂
+if ($BootstrapHiera)
+{
+    if (!$PuppetserverClass)
+    {
+        $PuppetserverClass = Get-Response 'Please enter the puppetserver class name (e.g foo-bar)' 'string' -Mandatory
     }
 }
 
 $ConfirmationMessage = @"
-The Puppet server will be configured with the following:
+`nThe Puppet server will be configured with the following:
 
 Hostname: $Hostname
 Major Puppet version: $MajorVersion`n
@@ -348,10 +340,15 @@ else
 {
     $ConfirmationMessage += "Install r10k: false`n"
 }
-$ConfirmationMessage += "Puppetserver class: $PuppetserverClass`n"
+if ($PuppetserverClass)
+{
+    $ConfirmationMessage += "Puppetserver class: $PuppetserverClass`n"
+}
+$ConfirmationMessage += "`nIs this correct?"
 $ConfirmCheck = Get-Response $ConfirmationMessage 'bool'
 if (!$ConfirmCheck)
 {
+    # We could potentially wrap the whole in a while loop until we are happy
     throw 'Bootstrap aborted'
 }
 
@@ -595,15 +592,24 @@ git:
 }
 
 # Perform a Puppet run
+# If we're bootstrapping hiera then we'll need to a puppet apply to get up and running
 if ($BootstrapHiera)
 {
     Write-Host "Running puppet apply against $BootstrapHiera"
-    $BootstrapHieraPath = "/etc/puppetlabs/code/environments/$BootstrapEnvironment/$BootstrapHiera"
-    $ApplyArguments = @('apply',"--hiera_config=$BootstrapHieraPath")
+    $ApplyArguments = @('apply')
+    if ($BootstrapEnvironment)
+    {
+        $BootstrapHieraPath = "/etc/puppetlabs/code/environments/$BootstrapEnvironment/$BootstrapHiera"
+    }
+    else
+    {
+        $BootstrapHieraPath = "/etc/puppetlabs/code/environments/production/$BootstrapHiera"
+    }
     if (!(Test-Path $BootstrapHieraPath))
     {
-        throw "Hiera file '$BootstrapHieraPath' does not exist"
+        throw "Cannot find hiera file at '$BootstrapHieraPath'"
     }
+    $ApplyArguments += @("--hiera_config=$BootstrapHieraPath")
     if ($BootstrapEnvironment)
     {
         $ModulePath = "/etc/puppetlabs/code/environments/$BootstrapEnvironment/modules:/etc/puppetlabs/code/environments/$BootstrapEnvironment/ext-modules"
@@ -611,7 +617,7 @@ if ($BootstrapHiera)
     }
     if ($PuppetserverClass)
     {
-        $ApplyArguments += ('-e',$PuppetserverClass)
+        $ApplyArguments += ('-e', "include $PuppetserverClass")
     }
     & /opt/puppetlabs/bin/puppet $ApplyArguments
     if ($LASTEXITCODE -ne 0)
@@ -619,6 +625,7 @@ if ($BootstrapHiera)
         throw 'Failed to run puppet apply'
     }
 }
+# If we're not bootstrapping hiera (or only bootstrapping the environment) we can just run a puppet agent -t
 else
 {
     Write-Host 'Running puppet agent -t'
