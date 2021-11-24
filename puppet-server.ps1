@@ -2,16 +2,27 @@
 .SYNOPSIS
     Bootstraps the installation of Puppetserver
 .DESCRIPTION
-    Long description
+    This script is used to bootstrap the installation of a Puppetserver, it can be used interactively, or you can pass in
+    parameters to set your desired options.
+    Passing the -SkipOptionalPrompts flag will skip all optional prompts.
+    Passing the -SkipConfirmation flag will skip the confirmation prompts.
 .EXAMPLE
-    PS C:\> <example usage>
-    Explanation of what the example does
-.INPUTS
-    Inputs (if any)
-.OUTPUTS
-    Output (if any)
-.NOTES
-    General notes
+    PS C:\> .\puppet-server.ps1 -MajorVersion 6 -DomainName "myDomain.com"
+    
+    This would install Puppetserver 6 as the optional information has not been provided and nor has the -SkipOptionalPrompts flag
+    the user would be prompted for the rest of the information
+.EXAMPLE
+    PS C:\> .\puppet-server.ps1 `
+        -MajorVersion 7 `
+        -DomainName "myDomain.com" `
+        -PuppetserverClass 'puppetserver' `
+        -Hostname "puppet7" `
+        -SkipOptionalPrompts `
+        -SkipConfirmation
+
+    
+    This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
+    information, and the -SkipConfirmation flag would skip the confirmation prompt.
 #>
 [CmdletBinding()]
 param
@@ -39,12 +50,7 @@ param
     # Optional CSR attributes to set
     [Parameter(Mandatory = $false)]
     [hashtable]
-    $CSRExtensions = @{pp_environment = 'live'; pp_service = 'puppetserver'; 'pp_role' = 'puppet6_server' },
-
-    # Set this if you plan to use r10k to deploy your Puppet code
-    [Parameter(Mandatory = $false)]
-    [switch]
-    $GenerateR10kConfiguration,
+    $CSRExtensions = @{pp_environment = 'live'; pp_service = 'puppetserver'; 'pp_role' = 'puppet6' },
 
     # The repository where your Puppet configurations are stored (if using r10k), this should be the ssh URL
     [Parameter(Mandatory = $false)]
@@ -79,9 +85,16 @@ param
     # If set will skip all optional prompts that have not been provided
     [Parameter(Mandatory = $false)]
     [switch]
-    $SkipOptionalPrompts
+    $SkipOptionalPrompts,
+
+    # If set will skip the confirmation prompt before installation
+    [Parameter(Mandatory = $false)]
+    [switch]
+    $SkipConfirmation
 )
 #Requires -Version 6
+
+$ErrorActionPreference = 'Stop'
 
 ### Parameter validation ###
 if ($eyamlPrivateKey -and !($eyamlPublicKey))
@@ -207,6 +220,19 @@ function Test-Administrator
         return $false
     }
 }
+function Get-CSRAttributes 
+{
+    $Continue = $true
+    $CSRExtensions = @{}
+    while ($Continue)
+    {
+        $KeyName = Get-Response 'Please enter the key name (e.g pp_environment)' 'string' -Mandatory
+        $Value = Get-Response "Please enter the value for '$KeyName'" 'string' -Mandatory
+        $CSRExtensions.Add($KeyName, $Value)
+        $Continue = Get-Response 'Would you like to add another key? [y]es/[n]o' 'bool'
+    }
+}
+
 
 if (!$IsLinux)
 {
@@ -218,161 +244,193 @@ if (!(Test-Administrator))
     throw 'This script must be run as administrator.'
 }
 
-if (!$DomainName)
+while (!$ConfirmCheck)
 {
-    $DomainName = Get-Response 'Enter your domain name (e.g foo-bar.com)' 'string' -Mandatory
-}
-
-if (!$Hostname)
-{
-    $Hostname = & hostname
-    if (!$SkipOptionalPrompts)
+    if (!$DomainName)
     {
-        Write-Host "Current hostname is $Hostname"
-        $HostnameCheck = Get-Response 'Do you want to change the hostname?' 'bool'
-        if ($HostnameCheck)
+        $DomainName = Get-Response 'Enter your domain name (e.g foo-bar.com)' 'string' -Mandatory
+    }
+
+    if (!$Hostname)
+    {
+        $Hostname = & hostname
+        if (!$SkipOptionalPrompts)
         {
-            $Hostname = Get-Response 'Enter the new hostname' 'string' -Mandatory
+            Write-Host "Current hostname is $Hostname"
+            $HostnameCheck = Get-Response 'Do you want to change the hostname?' 'bool'
+            if ($HostnameCheck)
+            {
+                $Hostname = Get-Response 'Enter the new hostname' 'string' -Mandatory
+            }
         }
     }
-}
 
-if ($Hostname -notmatch "$DomainName")
-{
-    $Hostname += ".$DomainName"
-}
-
-if (!$eyamlPrivateKey -or !$eyamlPublicKey -and !$SkipOptionalPrompts)
-{
-    $eyamlCheck = Get-Response 'Do you have an eyaml key pair?' 'bool'
-    if ($eyamlCheck)
+    if ($Hostname -notmatch "$DomainName")
     {
-        $eyamlPrivateKey = Get-Response 'Please enter your eyaml private key' 'string' -Mandatory
-        $eyamlPublicKey = Get-Response 'Please enter your eyaml public key' 'string' -Mandatory
+        $Hostname += ".$DomainName"
     }
-}
 
-if ((!$GenerateR10kConfiguration) -or (!$GitHubRepo) -and !$SkipOptionalPrompts)
-{
-    $r10kCheck = Get-Response 'Do you plan to use r10k?' 'bool'
-    if ($r10kCheck)
+    if (!$CSRExtensions -and !$SkipOptionalPrompts)
+    {
+        $CSRExtensionCheck = Get-Response 'Do you want to add CSR extensions?' 'bool'
+        if ($CSRExtensionCheck)
+        {
+            $CSRExtensions = Get-CSRAttributes
+        }
+    }
+
+    if (!$eyamlPrivateKey -or !$eyamlPublicKey -and !$SkipOptionalPrompts)
+    {
+        $eyamlCheck = Get-Response 'Do you have an eyaml key pair?' 'bool'
+        if ($eyamlCheck)
+        {
+            $eyamlPrivateKey = Get-Response 'Please enter your eyaml private key' 'string' -Mandatory
+            $eyamlPublicKey = Get-Response 'Please enter your eyaml public key' 'string' -Mandatory
+        }
+    }
+
+    if (!$GitHubRepo -and !$SkipOptionalPrompts)
+    {
+        $r10kCheck = Get-Response 'Do you plan to use r10k?' 'bool'
+        if ($r10kCheck)
+        {
+            while ($GitHubRepo -notmatch 'git@github.com:(.*)\/(.*).git')
+            {
+                $GitHubRepo = Get-Response 'Please enter your GitHub repository' 'string' -Mandatory
+            }
+        }
+    }
+
+    if ($GitHubRepo)
     {
         $GenerateR10kConfiguration = $true
-        while ($GitHubRepo -notmatch 'git@github.com:(.*)\/(.*).git')
+        # Try to be clever about key naming
+        if ($GitHubRepo -match '\/(?<repo_name>.*).git')
         {
-            $GitHubRepo = Get-Response 'Please enter your GitHub repository' 'string' -Mandatory
+            $RepoName = $matches['repo_name']
         }
-    }
-}
-
-if ($GitHubRepo)
-{
-    # Try to be clever about key naming
-    if ($GitHubRepo -match '\/(?<repo_name>.*).git')
-    {
-        $RepoName = $matches['repo_name']
-    }
-    else
-    {
-        $RepoName = 'control_repo'
-    }
-    if (!$DeployKeyPath -and !$SkipOptionalPrompts)
-    {
-        # Check if this is a private repo
-        $PrivateRepoCheck = Get-Response 'Is this a private repository?' 'bool'
-        if ($PrivateRepoCheck)
+        else
         {
-            $DeployKeyPath = "/etc/puppetlabs/puppetserver/ssh/id-$RepoName.rsa"
+            $RepoName = 'control_repo'
+        }
+        if (!$DeployKeyPath -and !$SkipOptionalPrompts)
+        {
+            # Check if this is a private repo
+            $PrivateRepoCheck = Get-Response 'Is this a private repository?' 'bool'
+            if ($PrivateRepoCheck)
+            {
+                $DeployKeyPath = "/etc/puppetlabs/puppetserver/ssh/id-$RepoName.rsa"
+            }
+        }
+
+        if (!$BootstrapEnvironment)
+        {
+            $BootstrapEnvironment = Get-Response 'Please enter the bootstrap environment name (e.g bootstrap, production)' 'string' -Mandatory
         }
     }
 
-    if (!$BootstrapEnvironment)
+    if (!$BootstrapHiera -and !$SkipOptionalPrompts)
     {
-        $BootstrapEnvironment = Get-Response 'Please enter the bootstrap environment name (e.g bootstrap, production)' 'string' -Mandatory
+        $BootstrapHieraCheck = Get-Response 'Do you want to set a bootstrap hiera data file?' 'bool'
+        if ($BootstrapHieraCheck)
+        {
+            $BootstrapHiera = Get-Response 'Please enter the bootstrap hiera data file name (e.g puppet.bootstrap.yaml)' 'string' -Mandatory
+        }
     }
-}
 
-if (!$BootstrapHiera -and !$SkipOptionalPrompts)
-{
-    $BootstrapHieraCheck = Get-Response 'Do you want to set a bootstrap hiera data file?' 'bool'
-    if ($BootstrapHieraCheck)
+    # We MUST have a PuppetserverClass if we've got a bootstrap hiera otherwise Puppet apply won't do anything 😂
+    if ($BootstrapHiera)
     {
-        $BootstrapHiera = Get-Response 'Please enter the bootstrap hiera data file name (e.g puppet.bootstrap.yaml)' 'string' -Mandatory
+        if (!$PuppetserverClass)
+        {
+            $PuppetserverClass = Get-Response 'Please enter the puppetserver class name (e.g puppetserver)' 'string' -Mandatory
+        }
     }
-}
 
-# We MUST have a PuppetserverClass if we've got a bootstrap hiera otherwise Puppet apply won't do anything 😂
-if ($BootstrapHiera)
-{
-    if (!$PuppetserverClass)
-    {
-        $PuppetserverClass = Get-Response 'Please enter the puppetserver class name (e.g puppetserver)' 'string' -Mandatory
-    }
-}
-
-$ConfirmationMessage = @"
+    $ConfirmationMessage = @"
 `nThe Puppet server will be configured with the following:
 
 Hostname: $Hostname
 Major Puppet version: $MajorVersion`n
 "@
 
-if ($eyamlPrivateKey)
-{
-    $ConfirmationMessage += "Install eyaml: true`n"
-}
-else
-{
-    $ConfirmationMessage += "Install eyaml: false`n"
-}
-if ($GitHubRepo)
-{
-    $ConfirmationMessage += @"
+    if ($eyamlPrivateKey)
+    {
+        $ConfirmationMessage += "Install eyaml: true`n"
+    }
+    else
+    {
+        $ConfirmationMessage += "Install eyaml: false`n"
+    }
+    if ($GitHubRepo)
+    {
+        $ConfirmationMessage += @"
 Install r10k: true
 GitHub repository: $GitHubRepo`n
 "@
-    if ($DeployKeyPath)
-    {
-        $ConfirmationMessage += "Deploy key: $DeployKeyPath`n"
+        if ($DeployKeyPath)
+        {
+            $ConfirmationMessage += "Deploy key: $DeployKeyPath`n"
+        }
+        if ($BootstrapEnvironment)
+        {
+            $ConfirmationMessage += "Bootstrap environment: $BootstrapEnvironment`n"
+        }
+        if ($BootstrapHiera)
+        {
+            $ConfirmationMessage += "Bootstrap hiera data file: $BootstrapHiera`n"
+        }
     }
-    if ($BootstrapEnvironment)
+    else
     {
-        $ConfirmationMessage += "Bootstrap environment: $BootstrapEnvironment`n"
+        $ConfirmationMessage += "Install r10k: false`n"
     }
-    if ($BootstrapHiera)
+    if ($PuppetserverClass)
     {
-        $ConfirmationMessage += "Bootstrap hiera data file: $BootstrapHiera`n"
+        $ConfirmationMessage += "Puppetserver class: $PuppetserverClass`n"
     }
-}
-else
-{
-    $ConfirmationMessage += "Install r10k: false`n"
-}
-if ($PuppetserverClass)
-{
-    $ConfirmationMessage += "Puppetserver class: $PuppetserverClass`n"
-}
-$ConfirmationMessage += "`nIs this correct?"
-$ConfirmCheck = Get-Response $ConfirmationMessage 'bool'
-if (!$ConfirmCheck)
-{
-    # We could potentially wrap the whole in a while loop until we are happy
-    throw 'Bootstrap aborted'
+    if ($SkipConfirmation)
+    {
+        Write-Host $ConfirmationMessage
+        $ConfirmCheck = $true
+    }
+    else
+    {
+        $ConfirmationMessage += "`nIs this correct?"
+        $ConfirmCheck = Get-Response $ConfirmationMessage 'bool'
+    }
+    if (!$ConfirmCheck)
+    {
+        # Clear out all the variables so we can start again
+        $DomainName = $null
+        $Hostname = $null
+        $eyamlPrivateKey = $null
+        $eyamlPublicKey = $null
+        $GitHubRepo = $null
+        $DeployKeyPath = $null
+        $BootstrapEnvironment = $null
+        $BootstrapHiera = $null
+        $PuppetserverClass = $null
+        $SkipOptionalPrompts = $false
+    }
 }
 
 ### Begin bootstrap ###
-Write-Host 'Beginning bootstrap process'
+Write-Host 'Beginning bootstrap process' -ForegroundColor Magenta
 
 # Check for the presence of the PuppetPowerShell module and install it if it's not present
 try
 {
-    $PuppetPowerShellCheck = Get-InstalledModule 'PuppetPowerShell'
+    $PuppetPowerShellCheck = Get-InstalledModule 'PuppetPowerShell' -ErrorAction SilentlyContinue
 }
-catch {}
+catch
+{
+    # Don't do anything - we'll install it below
+}
 
 if (!$PuppetPowerShellCheck)
 {
-    Write-Host 'Installing Puppet PowerShell module'
+    Write-Host 'Installing PuppetPowerShell module' -ForegroundColor Magenta
     try
     {
         Install-Module -Name 'PuppetPowerShell' -Repository PSGallery -Scope AllUsers -Force
@@ -384,7 +442,7 @@ if (!$PuppetPowerShellCheck)
 }
 
 # Install puppetserver
-Write-Host 'Installing puppetserver'
+Write-Host 'Installing puppetserver' -ForegroundColor Magenta
 try
 {
     Install-Puppet -MajorVersion $MajorVersion -Application 'puppetserver'
@@ -395,17 +453,24 @@ catch
 }
 
 # Install r10k if necessary
-Write-Host 'Installing r10k'
-& gem install r10k
-if ($LASTEXITCODE -ne 0)
+if ($GitHubRepo)
 {
-    throw 'Failed to install r10k'
+    $r10kCheck = & gem list r10k --local -q
+    if (!$r10kCheck)
+    {
+        Write-Host 'Installing r10k' -ForegroundColor Magenta
+        & gem install r10k
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw 'Failed to install r10k'
+        }
+    }
 }
 
 # Set the hostname if we have one
 if ($Hostname)
 {
-    Write-Host "Setting hostname to $Hostname"
+    Write-Host "Setting hostname to $Hostname" -ForegroundColor Magenta
     try
     {
         & hostname $Hostname
@@ -413,7 +478,13 @@ if ($Hostname)
         {
             throw  'Failed to set hostname'
         }
-        Set-Content -Path '/etc/hostname' -Value $Hostname
+        Set-Content -Path '/etc/hostname' -Value $Hostname -Force
+        $HostsFileContent = Get-Content '/etc/hosts' -Raw
+        if ($HostsFileContent -notmatch $Hostname)
+        {
+            $HostsFileContent = "127.0.0.1 $Hostname"
+            Add-Content -Path '/etc/hosts' -Value $HostsFileContent
+        }
     }
     catch
     {
@@ -427,14 +498,14 @@ if ($DeployKeyPath)
     # If the deploy key doesn't exist we'll need to generate one to be able to pull
     if (!(Test-Path $DeployKeyPath))
     {
-        Write-Host 'A deploy key will now be generated for you to copy to your repository'
+        Write-Host 'A deploy key will now be generated for you to copy to your repository' -ForegroundColor Magenta
         # Create the directory structure
         $DeployKeyParent = Split-Path $DeployKeyPath
         if (!(Test-Path $DeployKeyParent))
         {
             try
             {
-                New-Item -ItemType Directory -Force -Path $DeployKeyParent
+                New-Item -ItemType Directory -Force -Path $DeployKeyParent | Out-Null
             }
             catch
             {
@@ -443,7 +514,7 @@ if ($DeployKeyPath)
         }
         if ((Test-Path $DeployKeyPath))
         {
-            Write-Host "A deploy key already exists at $DeployKeyPath, it will be removed"
+            Write-Host "A deploy key already exists at $DeployKeyPath, it will be removed" -ForegroundColor Magenta
             try
             {
                 Remove-Item -Path $DeployKeyPath -Force
@@ -461,14 +532,14 @@ if ($DeployKeyPath)
             throw 'Failed to generate deploy key'
         }
         $KeyContent = Get-Content $DeployKeyPath -Raw
-        Write-Host "Please copy the following deploy key to your repository:`n"
+        Write-Host "Please copy the following deploy key to your repository:`n" -ForegroundColor Magenta
         Write-Host $KeyContent
         Write-Host 'Press any key to continue the bootstrap process'
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
 
     # Make sure the key has sensible permissions (we run Puppetserver as root)
-    Write-Host 'Setting ACLs on deploy key'
+    Write-Host 'Setting ACLs on deploy key' -ForegroundColor Magenta
     & chown root:root (Join-Path $DeployKeyParent '*')
     if ($LASTEXITCODE -ne 0)
     {
@@ -482,7 +553,7 @@ if ($DeployKeyPath)
 }
 
 # Keyscan github.com, it makes things easier later on (we also use root to run puppetserver)
-Write-Host 'Adding github.com to known hosts'
+Write-Host 'Adding github.com to known hosts' -ForegroundColor Magenta
 $Keyscan = (& ssh-keyscan github.com) | Out-String
 $KnownHostsFile = '/root/.ssh/known_hosts'
 try
@@ -510,7 +581,7 @@ else
 {
     try
     {
-        New-Item -Path $KnownHostsFile -Value $Keyscan -Force
+        New-Item -Path $KnownHostsFile -Value $Keyscan -Force | Out-Null
     }
     catch
     {
@@ -520,7 +591,7 @@ else
 
 if ($BootstrapEnvironment)
 {
-    Write-Host "Setting Puppet agent environment to $BootstrapEnvironment"
+    Write-Host "Setting Puppet agent environment to $BootstrapEnvironment" -ForegroundColor Magenta
     try
     {
         Set-PuppetConfigOption -ConfigOptions @{environment = $BootstrapEnvironment }
@@ -550,10 +621,10 @@ if ($GenerateR10kConfiguration)
     $r10kConfigurationParent = Split-Path $r10kConfigurationPath
     if (!(Test-Path $r10kConfigurationParent))
     {
-        Write-Host 'Creating r10k configuration directory'
+        Write-Host 'Creating r10k configuration directory' -ForegroundColor Magenta
         try
         {
-            New-Item -ItemType Directory -Force -Path $r10kConfigurationParent
+            New-Item -ItemType Directory -Force -Path $r10kConfigurationParent | Out-Null
         }
         catch
         {
@@ -581,14 +652,15 @@ git:
     }
     try
     {
-        New-Item -Path $r10kConfigurationPath -Value $r10kConfiguration -Force
+        New-Item -Path $r10kConfigurationPath -Value $r10kConfiguration -Force | Out-Null
     }
     catch
     {
         throw "Failed to create r10k configuration file.`n$($_.Exception.Message)"
     }
 
-    Write-Host 'Performing first run of r10k, this may take a while...' -ForegroundColor Yellow
+    Write-Host 'Performing first run of r10k' -ForegroundColor Magenta
+    Write-Warning 'This may take some time...'
     & /usr/local/bin/r10k deploy environment --puppetfile
     if ($LASTEXITCODE -ne 0)
     {
@@ -605,7 +677,7 @@ git:
 # If we're bootstrapping hiera then we'll need to a puppet apply to get up and running
 if ($BootstrapHiera)
 {
-    Write-Host "Running puppet apply against $BootstrapHiera"
+    Write-Host "Running puppet apply against $BootstrapHiera" -ForegroundColor Magenta
     $ApplyArguments = @('apply')
     if ($BootstrapEnvironment)
     {
@@ -629,8 +701,9 @@ if ($BootstrapHiera)
     {
         $ApplyArguments += ('-e', "include $PuppetserverClass")
     }
+    $ApplyArguments += ('--detailed-exitcodes')
     & /opt/puppetlabs/bin/puppet $ApplyArguments
-    if ($LASTEXITCODE -ne 0)
+    if ($LASTEXITCODE -notin (0, 2))
     {
         throw 'Failed to run puppet apply'
     }
@@ -638,11 +711,13 @@ if ($BootstrapHiera)
 # If we're not bootstrapping hiera (or only bootstrapping the environment) we can just run a puppet agent -t
 else
 {
-    Write-Host 'Running puppet agent -t'
+    Write-Host 'Running puppet agent test' -ForegroundColor Magenta
     & /opt/puppetlabs/bin/puppet agent -t
-    # Sign cert?
+    if ($LASTEXITCODE -notin (0, 2))
+    {
+        throw 'Failed to run puppet agent test'
+    }
 }
-
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
 Write-Host "Don't forget to:"
