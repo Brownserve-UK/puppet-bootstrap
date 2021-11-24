@@ -386,7 +386,13 @@ while (!$ConfirmCheck)
 Hostname: $Hostname
 Major Puppet version: $MajorVersion`n
 "@
-
+    if ($CSRExtensions)
+    {
+        $ConfirmationMessage += "Certificate Extensions:`n"
+        $CSRExtensions.GetEnumerator() | ForEach-Object {
+            $ConfirmationMessage += "  $($_.Key): $($_.Value)`n"
+        }
+    }
     if ($eyamlPrivateKey)
     {
         $ConfirmationMessage += "Install eyaml: true`n"
@@ -791,7 +797,7 @@ else
 }
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
-Write-Host "Don't forget to:"
+Write-Host "Puppet should now take over and start managing this node.`nDon't forget to:"
 Write-Host "  - Add a DHCP reservation or static IP for this machine."
 if ($eyamlPrivateKey)
 {
