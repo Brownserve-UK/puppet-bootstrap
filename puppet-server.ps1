@@ -792,7 +792,7 @@ else
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
 Write-Host "Don't forget to:"
-Write-Host "  - Add a DHCP reservation or static IP for this machine.`n"
+Write-Host "  - Add a DHCP reservation or static IP for this machine."
 if ($eyamlPrivateKey)
 {
     Write-Host '  - Test your eyaml encryption/decryption'
