@@ -15,6 +15,7 @@
     PS C:\> .\puppet-server.ps1 `
         -MajorVersion 7 `
         -DomainName "myDomain.com" `
+        -GitHubRepo "https://github.com/Brownserve-UK/puppet_hiera_example.git"
         -PuppetserverClass 'puppetserver' `
         -Hostname "puppet7" `
         -SkipOptionalPrompts `
@@ -23,6 +24,25 @@
     
     This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
     information, and the -SkipConfirmation flag would skip the confirmation prompt.
+    As the Hostname parameter has been provided the Hostname would be set to puppet7.
+    As the GitHubRepo parameter has been provided r10k will be installed and configured against this repository.
+.EXAMPLE
+    PS C:\> .\puppet-server.ps1 `
+        -MajorVersion 7 `
+        -DomainName "myDomain.com" `
+        -GitHubRepo "git@github.com:Brownserve-UK/puppet_hiera_example.git" `
+        -DeployKeyPath '/etc/puppetlabs/puppetserver/ssh/id-puppet_hiera_example' `
+        -PuppetserverClass 'puppetserver' `
+        -SkipOptionalPrompts `
+        -SkipConfirmation
+
+    
+    This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
+    information, and the -SkipConfirmation flag would skip the confirmation prompt.
+    As the Hostname parameter has been provided the Hostname would be set to puppet7.
+    As the GitHubRepo parameter has been provided r10k will be installed and configured against this repository.
+    As this is a private repository the DeployKeyPath parameter has been provided and r10k will be configured to use this key, if the
+    key does not exist it will be created.
 #>
 [CmdletBinding()]
 param
