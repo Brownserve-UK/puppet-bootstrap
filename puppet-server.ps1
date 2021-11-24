@@ -70,7 +70,7 @@ param
     # Optional CSR attributes to set
     [Parameter(Mandatory = $false)]
     [hashtable]
-    $CSRExtensions = @{pp_environment = 'live'; pp_service = 'puppetserver'; 'pp_role' = 'puppet6' },
+    $CSRExtensions,
 
     # The repository where your Puppet configurations are stored (if using r10k), this should be the ssh URL
     [Parameter(Mandatory = $false)]
@@ -101,6 +101,11 @@ param
     [Parameter(Mandatory = $false)]
     [string]
     $eyamlPublicKey,
+
+    # Optional path to use for storing eyaml keys
+    [Parameter(Mandatory = $false)]
+    [string]
+    $eyamlKeyPath,
 
     # If set will skip all optional prompts that have not been provided
     [Parameter(Mandatory = $false)]
@@ -308,6 +313,14 @@ while (!$ConfirmCheck)
             $eyamlPublicKey = Get-Response 'Please enter your eyaml public key' 'string' -Mandatory
         }
     }
+    if ($eyamlPrivateKey)
+    {
+        # We need to know where to store the keys if it hasn't been set
+        if (!$eyamlKeyPath)
+        {
+            $eyamlKeyPath = Get-Response 'Please enter the path to where you want to store the eyaml key pair (e.g. /etc/puppetlabs/puppet/keys)' 'string' -Mandatory
+        }
+    }
 
     if (!$GitHubRepo -and !$SkipOptionalPrompts)
     {
@@ -377,6 +390,7 @@ Major Puppet version: $MajorVersion`n
     if ($eyamlPrivateKey)
     {
         $ConfirmationMessage += "Install eyaml: true`n"
+        $ConfirmationMessage += "Key path: $eyamlKeyPath`n"
     }
     else
     {
@@ -426,6 +440,7 @@ GitHub repository: $GitHubRepo`n
         $Hostname = $null
         $eyamlPrivateKey = $null
         $eyamlPublicKey = $null
+        $eyamlKeyPath = $null
         $GitHubRepo = $null
         $DeployKeyPath = $null
         $BootstrapEnvironment = $null
@@ -609,6 +624,42 @@ else
     }
 }
 
+if ($eyamlPrivateKey)
+{
+    Write-Host 'Setting up eyaml' -ForegroundColor Magenta
+    & gem install hiera-eyaml
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw 'Failed to install eyaml Ruby gem'
+    }
+    & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw 'Failed to install eyaml Puppet gem'
+    }
+    if (!(Test-Path $eyamlKeyPath))
+    {
+        try
+        {
+            New-Item -Path $eyamlKeyPath -ItemType Directory -Force | Out-Null
+    
+        }
+        catch
+        {
+            throw "Failed to create directory $eyamlKeyPath.`n$($_.Exception.Message)"
+        }    
+    }
+    try
+    {
+        New-Item -Path (Join-Path $eyamlKeyPath 'private_key.pkcs7.pem') -Value $eyamlPrivateKey -ItemType File -Force | Out-Null
+        New-Item -Path (Join-Path $eyamlKeyPath 'public_key.pkcs7.pem') -Value $eyamlPublicKey -ItemType File -Force | Out-Null
+    }
+    catch
+    {
+        throw "Failed to create eyaml key files.`n$($_.Exception.Message)"
+    }
+}
+
 if ($BootstrapEnvironment)
 {
     Write-Host "Setting Puppet agent environment to $BootstrapEnvironment" -ForegroundColor Magenta
@@ -741,7 +792,11 @@ else
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
 Write-Host "Don't forget to:"
-Write-Host "  - Add a DHCP reservation or static IP for this machine.`n  - Test your eyaml encryption/decryption"
+Write-Host "  - Add a DHCP reservation or static IP for this machine.`n"
+if ($eyamlPrivateKey)
+{
+    Write-Host '  - Test your eyaml encryption/decryption'
+}
 if ($BootstrapEnvironment)
 {
     Write-Host '  - Merge your branch into production.'
