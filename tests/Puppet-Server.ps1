@@ -41,13 +41,13 @@ catch
     throw "Unable to retrieve private and public keys from GitHub.`n$($_.Exception.Message)"
 }
 
-$Hostname = "puppet$PuppetVersion"
 $DomainName = 'local'
 if ($GitHubBranch -eq 'dev')
 {
     $DomainName = 'dev'
     $PuppetVersion = 7
 }
+$Hostname = "puppet$PuppetVersion"
 
 $CSRExtensions = @{
     pp_environment = $GitHubBranch
