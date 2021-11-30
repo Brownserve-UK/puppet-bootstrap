@@ -131,7 +131,6 @@ if (!($eyamlPrivateKey) -and $eyamlPublicKey)
     throw 'You must specify both a private and public key for eyaml'
 }
 
-# Copy these functions from Brownserve.PSTools as they are super helpful
 function Get-Response
 {
     param
