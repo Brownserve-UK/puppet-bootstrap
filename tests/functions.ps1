@@ -1,3 +1,6 @@
+# Functions to be used within tests
+
+
 # Waits until Puppet has applied idempotently
 function Wait-UntilConvergence
 {
@@ -36,21 +39,28 @@ function Wait-UntilConvergence
                 $errorFromPuppetDb = $_.ErrorDetails.Message
                 $errorMessage = $_.Exception.Message
             }
-            # We need to use another try catch block to avoid having the ConvertFrom-Json error message bomb out the whole script :(
-            try
+            if ($errorMessage -or $errorFromPuppetDb)
             {
-                $errorFromPuppetDb = ($errorFromPuppetDb | ConvertFrom-Json -ErrorAction SilentlyContinue).error
-                # If we can ConvertFrom-Json the error, then we know it's a PuppetDB error 
-                Write-Warning $errorFromPuppetDb
+                # We need to use another try catch block to avoid having the ConvertFrom-Json error message bomb out the whole script :(
+                try
+                {
+                    $errorFromPuppetDb = ($errorFromPuppetDb | ConvertFrom-Json -ErrorAction SilentlyContinue).error
+                    # If we can ConvertFrom-Json the error, then we know it's a PuppetDB error 
+                    Write-Warning $errorFromPuppetDb
+                }
+                catch
+                {
+                    # Otherwise it's a generic error
+                    Write-Warning $errorMessage
+                }
             }
-            catch
+            else
             {
-                # Otherwise it's a generic error
-                Write-Warning $errorMessage
+                Write-Verbose "Last report status: $($LastReportSummary.latest_report_status)"
             }
         }
 
-        Write-Host "Reached desired state."
+        Write-Host 'Reached desired state.'
         Write-Debug @"
 `$LastReportSummary.latest_report_status=$($LastReportSummary.latest_report_status)
 `$LastReportSummary.report_timestamp=$($LastReportSummary.report_timestamp)
