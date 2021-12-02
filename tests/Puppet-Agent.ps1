@@ -24,7 +24,7 @@ $pp_environment = 'live'
 if ($Environment -eq 'dev')
 {
     $PuppetVersion = 7
-    $pp_environment = 'staging'
+    $pp_environment = 'dev'
     $DomainName = 'dev'
 }
 if ($IsLinux)
