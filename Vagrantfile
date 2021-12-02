@@ -17,7 +17,7 @@ Vagrant.configure("2") do |config|
         apt-get install -y powershell
     SHELL
     config.vm.provision "hosts", type: "shell", inline: <<-SHELL
-      sudo bash -c 'echo "192.168.60.2 puppetserver.local" >> /etc/hosts'
+      sudo bash -c 'echo "192.168.60.2 puppetserver.local puppetserver.dev" >> /etc/hosts'
     SHELL
     config.vm.define "puppetagent-linux" do |pl|
       pl.vm.hostname = "puppetagent-linux"
@@ -36,6 +36,7 @@ Vagrant.configure("2") do |config|
         choco install powershell-core -y
       SHELL
       pw.vm.provision "hosts", type: "shell", inline: "Add-Content -Path 'c:\\Windows\\System32\\Drivers\\etc\\hosts' -Value '192.168.60.2    puppetserver.local'"
+      pw.vm.provision "hosts", type: "shell", inline: "Add-Content -Path 'c:\\Windows\\System32\\Drivers\\etc\\hosts' -Value '192.168.60.2    puppetserver.dev'"
     end
     config.vm.define "puppetserver" do |ps|
       ps.vm.hostname = "puppetserver"
