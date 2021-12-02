@@ -19,9 +19,8 @@ function Wait-UntilConvergence
     try
     {
         $LastReportSummary = @{ latest_report_status = 'AnyStringWillDo' }
-        while ($LastReportSummary.latest_report_status -ne 'unchanged' -or [datetime]$LastReportSummary.report_timestamp -lt $startTime)
+        while ($LastReportSummary.latest_report_status -ne 'unchanged')
         {
-
             if ($watch.Elapsed.TotalMinutes -gt $Timeout)
             {
                 throw "Timed out waiting for $ComputerName to reach desired state after $Timeout minutes..."
@@ -31,6 +30,7 @@ function Wait-UntilConvergence
 
             try
             {
+                Write-Verbose "Probing http://${PuppetServer}:${PuppetDBPort}/pdb/query/v4/nodes/${ComputerName}"
                 $LastReportSummary = Invoke-RestMethod "http://${PuppetServer}:${PuppetDBPort}/pdb/query/v4/nodes/${ComputerName}"
             }
             catch
