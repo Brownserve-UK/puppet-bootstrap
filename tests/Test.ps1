@@ -41,7 +41,7 @@ try
     {
         $URI += 'dev/'
     }
-    $PuppetBoardTest = Invoke-WebRequest -Uri  -Method Get
+    $PuppetBoardTest = Invoke-WebRequest -Uri $URI -Method Get
     if ($PuppetBoardTest.StatusCode -ne 200)
     {
         Write-Error 'Failed to connect to the PuppetBoard'
