@@ -80,4 +80,4 @@ else
 }
 
 # This probably needs to come out into the calling logic so if a node is rebooted it doesn't die!
-Wait-UntilConvergence -ComputerName ("$Hostname.$DomainName").ToLower() -PuppetServer "$PuppetServer.$DomainName" -PuppetDBPort "8080"
+Wait-UntilConvergence -ComputerName ("$Hostname.$DomainName").ToLower() -PuppetServer "$PuppetServer.$DomainName" -PuppetDBPort "8080" -Verbose

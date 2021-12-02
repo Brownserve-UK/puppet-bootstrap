@@ -70,4 +70,4 @@ $CSRExtensions = @{
     -SkipOptionalPrompts `
     -SkipConfirmation
 
-Wait-UntilConvergence -ComputerName "$Hostname.$DomainName" -PuppetServer "$Hostname.$DomainName" -PuppetDBPort "8080"
+Wait-UntilConvergence -ComputerName "$Hostname.$DomainName" -PuppetServer "$Hostname.$DomainName" -PuppetDBPort "8080" -Verbose
