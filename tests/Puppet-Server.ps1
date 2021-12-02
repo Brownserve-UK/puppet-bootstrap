@@ -70,4 +70,7 @@ $CSRExtensions = @{
     -SkipOptionalPrompts `
     -SkipConfirmation
 
+# Perform a second run to check for idempotency
+& /opt/puppetlabs/puppet/bin/puppet agent -t
+
 Wait-UntilConvergence -ComputerName "$Hostname.$DomainName" -PuppetServer "$Hostname.$DomainName" -PuppetDBPort "8080" -Verbose
