@@ -535,12 +535,12 @@ if ($Hostname)
 # Sort out deployment keys if we have a private repo
 if ($DeployKeyPath)
 {
+    $DeployKeyParent = Split-Path $DeployKeyPath
     # If the deploy key doesn't exist we'll need to generate one to be able to pull
     if (!(Test-Path $DeployKeyPath))
     {
         Write-Host 'A deploy key will now be generated for you to copy to your repository' -ForegroundColor Magenta
         # Create the directory structure
-        $DeployKeyParent = Split-Path $DeployKeyPath
         if (!(Test-Path $DeployKeyParent))
         {
             try
