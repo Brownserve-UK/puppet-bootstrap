@@ -21,6 +21,8 @@ This sets up Puppet agent on Linux/Windows nodes.
 | `SkipPuppetserverCheck` | switch  | false     | If declared this will skip checking communication with the Puppet server                                                                                           |
 | `SkipOptionalPrompts`   | switch  | false     | If declared this will disable any prompts for additional information and configure the node with the information that has been provided in the scripts parameters. |
 | `SkipConfirmation`      | switch  | false     | If declared this will skip the confirmation prompt.                                                                                                                |
+| `SkipInitialRun`      | switch  | false     | If declared this will skip the first run of Puppet.                                                                                                                |
+
 
 # puppet-server.ps1
 Bootstraps the installation and configuration of a new Puppetserver.
