@@ -83,7 +83,11 @@ param (
     # Skips the confirmation prompt
     [Parameter(Mandatory = $false)]
     [switch]
-    $SkipConfirmation
+    $SkipConfirmation,
+
+    # Skips the initial Puppet run, useful in some edge-cases
+    [switch]
+    $SkipInitialRun
 )
 #Requires -Version 6
 
@@ -525,25 +529,28 @@ if ($PuppetAgentConfigOptions)
 # Wait for a few seconds, I've found that sometimes Puppet isn't quite ready to go
 Start-Sleep -Seconds 10
 
-# Perform first run of Puppet
-Write-Host 'Performing initial Puppet run' -ForegroundColor Magenta
-$PuppetArgs = @('agent', '-t', '--detailed-exitcodes')
-if ($WaitForCert)
+if (!$SkipInitialRun)
 {
-    $PuppetArgs += @('--waitforcert', $WaitForCert)
-}
-if ($IsWindows)
-{
-    & puppet $PuppetArgs
-}
-else
-{
-    & /opt/puppetlabs/bin/puppet $PuppetArgs
-}
-if ($LASTEXITCODE -notin (0, 2))
-{
-    # Only warn as we want to continue if the run fails
-    Write-Warning "First Puppet run failed with exit code $LASTEXITCODE"
+    # Perform first run of Puppet
+    Write-Host 'Performing initial Puppet run' -ForegroundColor Magenta
+    $PuppetArgs = @('agent', '-t', '--detailed-exitcodes')
+    if ($WaitForCert)
+    {
+        $PuppetArgs += @('--waitforcert', $WaitForCert)
+    }
+    if ($IsWindows)
+    {
+        & puppet $PuppetArgs
+    }
+    else
+    {
+        & /opt/puppetlabs/bin/puppet $PuppetArgs
+    }
+    if ($LASTEXITCODE -notin (0, 2))
+    {
+        # Only warn as we want to continue if the run fails
+        Write-Warning "First Puppet run failed with exit code $LASTEXITCODE"
+    }
 }
 
 if ($EnableService)
@@ -558,3 +565,4 @@ if ($EnableService)
         throw "Failed to enable Puppet service.`n$($_.Exception.Message)"
     }
 }
+Write-Host 'Puppet bootstrapping complete 🎉' -ForegroundColor Green
