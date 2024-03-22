@@ -8,7 +8,7 @@
     Passing the -SkipConfirmation flag will skip the confirmation prompts.
 .EXAMPLE
     PS C:\> .\puppet-server.ps1 -MajorVersion 6 -DomainName "myDomain.com"
-    
+
     This would install Puppetserver 6 as the optional information has not been provided and nor has the -SkipOptionalPrompts flag
     the user would be prompted for the rest of the information
 .EXAMPLE
@@ -21,7 +21,7 @@
         -SkipOptionalPrompts `
         -SkipConfirmation
 
-    
+
     This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
     information, and the -SkipConfirmation flag would skip the confirmation prompt.
     As the Hostname parameter has been provided the Hostname would be set to puppet7.
@@ -36,7 +36,7 @@
         -SkipOptionalPrompts `
         -SkipConfirmation
 
-    
+
     This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
     information, and the -SkipConfirmation flag would skip the confirmation prompt.
     As the Hostname parameter has been provided the Hostname would be set to puppet7.
@@ -115,7 +115,17 @@ param
     # If set will skip the confirmation prompt before installation
     [Parameter(Mandatory = $false)]
     [switch]
-    $SkipConfirmation
+    $SkipConfirmation,
+
+    # The version of the r10k gem to install
+    [Parameter(Mandatory = $false)]
+    [string]
+    $R10kVersion,
+
+    # The version of the hiera-eyaml gem to install
+    [Parameter(Mandatory = $false)]
+    [string]
+    $HieraEyamlVersion
 )
 #Requires -Version 6
 
@@ -499,7 +509,14 @@ if ($GitHubRepo)
     if (!$r10kCheck)
     {
         Write-Host 'Installing r10k' -ForegroundColor Magenta
-        & gem install r10k
+        if ($R10kVersion)
+        {
+            & gem install r10k -v "$R10kVersion"
+        }
+        else
+        {
+            & gem install r10k
+        }
         if ($LASTEXITCODE -ne 0)
         {
             throw 'Failed to install r10k'
@@ -632,12 +649,26 @@ else
 if ($eyamlPrivateKey)
 {
     Write-Host 'Setting up eyaml' -ForegroundColor Magenta
-    & gem install hiera-eyaml
+    if ($HieraEyamlVersion)
+    {
+        & gem install hiera-eyaml -v "$HieraEyamlVersion"
+    }
+    else
+    {
+        & gem install hiera-eyaml
+    }
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to install eyaml Ruby gem'
     }
-    & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml
+    if ($HieraEyamlVersion)
+    {
+        & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml -v "$HieraEyamlVersion"
+    }
+    else
+    {
+        & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml
+    }
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to install eyaml Puppet gem'
@@ -647,12 +678,11 @@ if ($eyamlPrivateKey)
         try
         {
             New-Item -Path $eyamlKeyPath -ItemType Directory -Force | Out-Null
-    
         }
         catch
         {
             throw "Failed to create directory $eyamlKeyPath.`n$($_.Exception.Message)"
-        }    
+        }
     }
     try
     {
@@ -797,7 +827,7 @@ else
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
 Write-Host "Puppet should now take over and start managing this node.`nDon't forget to:"
-Write-Host "  - Add a DHCP reservation or static IP for this machine."
+Write-Host '  - Add a DHCP reservation or static IP for this machine.'
 if ($eyamlPrivateKey)
 {
     Write-Host '  - Test your eyaml encryption/decryption'
