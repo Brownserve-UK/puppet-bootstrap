@@ -125,7 +125,22 @@ param
     # The version of the hiera-eyaml gem to install
     [Parameter(Mandatory = $false)]
     [string]
-    $HieraEyamlVersion
+    $HieraEyamlVersion,
+
+    # The path to the Puppet agent binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $PuppetAgentPath = '/opt/puppetlabs/bin/puppet',
+
+    # The path to the Puppetserver binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $PuppetserverPath = '/opt/puppetlabs/bin/puppetserver',
+
+    # The path to the r10k binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $R10KPath
 )
 #Requires -Version 6
 
@@ -661,13 +676,24 @@ if ($eyamlPrivateKey)
     {
         throw 'Failed to install eyaml Ruby gem'
     }
+    if (!$PuppetserverPath)
+    {
+        try
+        {
+            $PuppetserverPath = (Get-Command puppetserver -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find puppetserver, aborting.'
+        }
+    }
     if ($HieraEyamlVersion)
     {
-        & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml -v "$HieraEyamlVersion"
+        & $PuppetserverPath gem install hiera-eyaml -v "$HieraEyamlVersion"
     }
     else
     {
-        & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml
+        & $PuppetserverPath gem install hiera-eyaml
     }
     if ($LASTEXITCODE -ne 0)
     {
@@ -767,7 +793,18 @@ git:
 
     Write-Host 'Performing first run of r10k' -ForegroundColor Magenta
     Write-Warning 'This may take some time...'
-    & /usr/local/bin/r10k deploy environment --puppetfile
+    if (!$R10KPath)
+    {
+        try
+        {
+            $R10KPath = (Get-Command r10k -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find r10k, aborting.'
+        }
+    }
+    & $R10KPath deploy environment --puppetfile
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to perform first run of r10k'
@@ -808,7 +845,18 @@ if ($BootstrapHiera)
         $ApplyArguments += ('-e', "include $PuppetserverClass")
     }
     $ApplyArguments += ('--detailed-exitcodes')
-    & /opt/puppetlabs/bin/puppet $ApplyArguments
+    if (!$PuppetAgentPath)
+    {
+        try
+        {
+            $PuppetAgentPath = (Get-Command puppet -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find puppet, aborting.'
+        }
+    }
+    & $PuppetAgentPath $ApplyArguments
     if ($LASTEXITCODE -notin (0, 2))
     {
         throw 'Failed to run puppet apply'
@@ -818,7 +866,7 @@ if ($BootstrapHiera)
 else
 {
     Write-Host 'Running puppet agent test' -ForegroundColor Magenta
-    & /opt/puppetlabs/bin/puppet agent -t
+    & $PuppetAgentPath agent -t
     if ($LASTEXITCODE -notin (0, 2))
     {
         throw 'Failed to run puppet agent test'
