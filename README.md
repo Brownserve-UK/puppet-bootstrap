@@ -45,3 +45,8 @@ Bootstraps the installation and configuration of a new Puppetserver.
 | `eyamlKeyPath`         | string | false     | Allows you to specify the path to where you will store your eyaml public/private keys.                                                         |
 | `SkipOptionalPrompts`  | switch | false     | If declared will skip all information gathering prompts.                                                                                       |
 | `SkipConfirmation`     | switch | false     | If declared will skip the confirmation prompt.                                                                                                 |
+| `R10kVersion`     | string | false     | Allows you to specify a version of the r10k gem to be installed, this is useful when constrained by the version of Ruby you are running                                                                                                 |
+| `HieraEyamlVersion`     | string | false     | Allows you to specify a version of the hiera-eyaml gem to be installed, this is useful when constrained by the version of Ruby you are running                                                                                                 |
+| `PuppetAgentPath`     | string | false     | The path to the `puppet` binary this is often not available in `PATH` so using the full path is preferred |
+| `PuppetserverPath`     | string | false     | The path to the `puppetserver` binary this is often not available in `PATH` so using the full path is preferred |
+| `R10KPath`     | string | false     | The path to the `r10k` binary it's useful to be able to override this when working with rbenv or rvm |
