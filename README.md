@@ -1,8 +1,10 @@
 # puppet-bootstrap
+
 This repo contains the scripts required to bootstrap a Puppet installation.
 These scripts are likely only relevant to Brownserve projects.
 
-# puppet-agent.ps1
+## puppet-agent.ps1
+
 This sets up Puppet agent on Linux/Windows nodes.
 
 | Parameter Name          | Type    | Mandatory | Description                                                                                                                                                        |
@@ -23,8 +25,8 @@ This sets up Puppet agent on Linux/Windows nodes.
 | `SkipConfirmation`      | switch  | false     | If declared this will skip the confirmation prompt.                                                                                                                |
 | `SkipInitialRun`      | switch  | false     | If declared this will skip the first run of Puppet.                                                                                                                |
 
+## puppet-server.ps1
 
-# puppet-server.ps1
 Bootstraps the installation and configuration of a new Puppetserver.
 
 | Parameter Name         | Type   | Mandatory | Description                                                                                                                                    |
