@@ -8,7 +8,7 @@
     Passing the -SkipConfirmation flag will skip the confirmation prompts.
 .EXAMPLE
     PS C:\> .\puppet-server.ps1 -MajorVersion 6 -DomainName "myDomain.com"
-    
+
     This would install Puppetserver 6 as the optional information has not been provided and nor has the -SkipOptionalPrompts flag
     the user would be prompted for the rest of the information
 .EXAMPLE
@@ -21,7 +21,7 @@
         -SkipOptionalPrompts `
         -SkipConfirmation
 
-    
+
     This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
     information, and the -SkipConfirmation flag would skip the confirmation prompt.
     As the Hostname parameter has been provided the Hostname would be set to puppet7.
@@ -36,7 +36,7 @@
         -SkipOptionalPrompts `
         -SkipConfirmation
 
-    
+
     This would install Puppetserver 7 as the -SkipOptionalPrompts flag has been provided the user would not be prompted for anymore
     information, and the -SkipConfirmation flag would skip the confirmation prompt.
     As the Hostname parameter has been provided the Hostname would be set to puppet7.
@@ -115,7 +115,32 @@ param
     # If set will skip the confirmation prompt before installation
     [Parameter(Mandatory = $false)]
     [switch]
-    $SkipConfirmation
+    $SkipConfirmation,
+
+    # The version of the r10k gem to install
+    [Parameter(Mandatory = $false)]
+    [string]
+    $R10kVersion,
+
+    # The version of the hiera-eyaml gem to install
+    [Parameter(Mandatory = $false)]
+    [string]
+    $HieraEyamlVersion,
+
+    # The path to the Puppet agent binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $PuppetAgentPath = '/opt/puppetlabs/bin/puppet',
+
+    # The path to the Puppetserver binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $PuppetserverPath = '/opt/puppetlabs/bin/puppetserver',
+
+    # The path to the r10k binary
+    [Parameter(Mandatory = $false)]
+    [string]
+    $R10KPath
 )
 #Requires -Version 6
 
@@ -395,6 +420,10 @@ Major Puppet version: $MajorVersion`n
     if ($eyamlPrivateKey)
     {
         $ConfirmationMessage += "Install eyaml: true`n"
+        if ($HieraEyamlVersion)
+        {
+            $ConfirmationMessage += "hiera-eyaml version: $HieraEyamlVersion`n"
+        }
         $ConfirmationMessage += "Key path: $eyamlKeyPath`n"
     }
     else
@@ -407,6 +436,10 @@ Major Puppet version: $MajorVersion`n
 Install r10k: true
 GitHub repository: $GitHubRepo`n
 "@
+        if ($R10kVersion)
+        {
+            $ConfirmationMessage += "r10k version: $R10kVersion`n"
+        }
         if ($DeployKeyPath)
         {
             $ConfirmationMessage += "Deploy key: $DeployKeyPath`n"
@@ -499,7 +532,14 @@ if ($GitHubRepo)
     if (!$r10kCheck)
     {
         Write-Host 'Installing r10k' -ForegroundColor Magenta
-        & gem install r10k
+        if ($R10kVersion)
+        {
+            & gem install r10k -v "$R10kVersion"
+        }
+        else
+        {
+            & gem install r10k
+        }
         if ($LASTEXITCODE -ne 0)
         {
             throw 'Failed to install r10k'
@@ -632,12 +672,37 @@ else
 if ($eyamlPrivateKey)
 {
     Write-Host 'Setting up eyaml' -ForegroundColor Magenta
-    & gem install hiera-eyaml
+    if ($HieraEyamlVersion)
+    {
+        & gem install hiera-eyaml -v "$HieraEyamlVersion"
+    }
+    else
+    {
+        & gem install hiera-eyaml
+    }
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to install eyaml Ruby gem'
     }
-    & /opt/puppetlabs/bin/puppetserver gem install hiera-eyaml
+    if (!$PuppetserverPath)
+    {
+        try
+        {
+            $PuppetserverPath = (Get-Command puppetserver -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find puppetserver, aborting.'
+        }
+    }
+    if ($HieraEyamlVersion)
+    {
+        & $PuppetserverPath gem install hiera-eyaml -v "$HieraEyamlVersion"
+    }
+    else
+    {
+        & $PuppetserverPath gem install hiera-eyaml
+    }
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to install eyaml Puppet gem'
@@ -647,12 +712,11 @@ if ($eyamlPrivateKey)
         try
         {
             New-Item -Path $eyamlKeyPath -ItemType Directory -Force | Out-Null
-    
         }
         catch
         {
             throw "Failed to create directory $eyamlKeyPath.`n$($_.Exception.Message)"
-        }    
+        }
     }
     try
     {
@@ -737,7 +801,18 @@ git:
 
     Write-Host 'Performing first run of r10k' -ForegroundColor Magenta
     Write-Warning 'This may take some time...'
-    & /usr/local/bin/r10k deploy environment --puppetfile
+    if (!$R10KPath)
+    {
+        try
+        {
+            $R10KPath = (Get-Command r10k -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find r10k, aborting.'
+        }
+    }
+    & $R10KPath deploy environment --puppetfile
     if ($LASTEXITCODE -ne 0)
     {
         throw 'Failed to perform first run of r10k'
@@ -778,7 +853,18 @@ if ($BootstrapHiera)
         $ApplyArguments += ('-e', "include $PuppetserverClass")
     }
     $ApplyArguments += ('--detailed-exitcodes')
-    & /opt/puppetlabs/bin/puppet $ApplyArguments
+    if (!$PuppetAgentPath)
+    {
+        try
+        {
+            $PuppetAgentPath = (Get-Command puppet -ErrorAction Stop).Source
+        }
+        catch
+        {
+            throw 'Unable to find puppet, aborting.'
+        }
+    }
+    & $PuppetAgentPath $ApplyArguments
     if ($LASTEXITCODE -notin (0, 2))
     {
         throw 'Failed to run puppet apply'
@@ -788,7 +874,7 @@ if ($BootstrapHiera)
 else
 {
     Write-Host 'Running puppet agent test' -ForegroundColor Magenta
-    & /opt/puppetlabs/bin/puppet agent -t
+    & $PuppetAgentPath agent -t
     if ($LASTEXITCODE -notin (0, 2))
     {
         throw 'Failed to run puppet agent test'
@@ -797,7 +883,7 @@ else
 
 Write-Host 'Bootstrapping complete 🎉' -ForegroundColor Green
 Write-Host "Puppet should now take over and start managing this node.`nDon't forget to:"
-Write-Host "  - Add a DHCP reservation or static IP for this machine."
+Write-Host '  - Add a DHCP reservation or static IP for this machine.'
 if ($eyamlPrivateKey)
 {
     Write-Host '  - Test your eyaml encryption/decryption'
