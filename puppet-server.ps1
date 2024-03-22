@@ -420,6 +420,10 @@ Major Puppet version: $MajorVersion`n
     if ($eyamlPrivateKey)
     {
         $ConfirmationMessage += "Install eyaml: true`n"
+        if ($HieraEyamlVersion)
+        {
+            $ConfirmationMessage += "hiera-eyaml version: $HieraEyamlVersion`n"
+        }
         $ConfirmationMessage += "Key path: $eyamlKeyPath`n"
     }
     else
@@ -432,6 +436,10 @@ Major Puppet version: $MajorVersion`n
 Install r10k: true
 GitHub repository: $GitHubRepo`n
 "@
+        if ($R10kVersion)
+        {
+            $ConfirmationMessage += "r10k version: $R10kVersion`n"
+        }
         if ($DeployKeyPath)
         {
             $ConfirmationMessage += "Deploy key: $DeployKeyPath`n"
